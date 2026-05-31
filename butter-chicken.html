@@ -32,8 +32,8 @@
       uiScanning: no;
       filterMinCF: 0.001;
       filterBeta: 0.01;
-      missTolerance: 5;
-      warmupTolerance: 5;"
+      missTolerance: 20;
+      warmupTolerance: 2;"
     color-space="sRGB"
     renderer="colorManagement: true; physicallyCorrectLights: true;"
     vr-mode-ui="enabled: false"
@@ -57,18 +57,36 @@
   </a-scene>
 
   <script>
-    const scene = document.querySelector('a-scene');
-    scene.addEventListener('arReady', () => {
-      document.getElementById('overlay').textContent = 'Point camera at the table card';
-    });
-    scene.addEventListener('targetFound', () => {
-      document.getElementById('overlay').style.display = 'none';
-    });
-    scene.addEventListener('targetLost', () => {
-      document.getElementById('overlay').style.display = 'block';
-      document.getElementById('overlay').textContent = 'Point camera at the table card';
-    });
-  </script>
+  const scene = document.querySelector('a-scene');
+  const target = document.querySelector('[mindar-image-target]');
+  const model = document.querySelector('a-gltf-model');
+  const overlay = document.getElementById('overlay');
+
+  let lastPosition = null;
+  let lastRotation = null;
+
+  scene.addEventListener('arReady', () => {
+    overlay.textContent = 'Point camera at the table card';
+  });
+
+  scene.addEventListener('targetFound', () => {
+    overlay.style.display = 'none';
+    // Make model visible
+    model.setAttribute('visible', true);
+  });
+
+  scene.addEventListener('targetLost', () => {
+    // DON'T hide the model - freeze it in last position
+    // Just silently wait for marker to come back
+    // Only show overlay after a long delay
+    setTimeout(() => {
+      if (!target.object3D.visible) {
+        overlay.style.display = 'block';
+        overlay.textContent = 'Point camera at the table card';
+      }
+    }, 3000); // wait 3 seconds before showing the message
+  });
+</script>
 
 </body>
 </html>
