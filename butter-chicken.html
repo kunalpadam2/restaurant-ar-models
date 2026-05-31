@@ -20,16 +20,26 @@
   </style>
 </head>
 <body>
-  <div id="overlay">Point camera at the table marker</div>
+
+  <div id="overlay">Point camera at the table card</div>
 
   <a-scene
-    mindar-image="imageTargetSrc: butter-chicken.mind; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;"
+    mindar-image="
+      imageTargetSrc: marker.mind;
+      autoStart: true;
+      uiLoading: no;
+      uiError: no;
+      uiScanning: no;
+      filterMinCF: 0.001;
+      filterBeta: 0.01;
+      missTolerance: 5;
+      warmupTolerance: 5;"
     color-space="sRGB"
     renderer="colorManagement: true; physicallyCorrectLights: true;"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
-    <a-assets>
+    <a-assets timeout="15000">
       <a-asset-item id="food-model" src="butter-chicken.glb"></a-asset-item>
     </a-assets>
 
@@ -38,9 +48,9 @@
     <a-entity mindar-image-target="targetIndex: 0">
       <a-gltf-model
         src="#food-model"
-        position="0 0.1 0"
+        position="0 0.5 0"
         rotation="0 0 0"
-        scale="1.5 1.5 1.5"
+        scale="3 3 3">
       </a-gltf-model>
     </a-entity>
 
@@ -49,15 +59,16 @@
   <script>
     const scene = document.querySelector('a-scene');
     scene.addEventListener('arReady', () => {
-      document.getElementById('overlay').textContent = 'Scanning for marker...';
+      document.getElementById('overlay').textContent = 'Point camera at the table card';
     });
     scene.addEventListener('targetFound', () => {
       document.getElementById('overlay').style.display = 'none';
     });
     scene.addEventListener('targetLost', () => {
       document.getElementById('overlay').style.display = 'block';
-      document.getElementById('overlay').textContent = 'Point camera at the table marker';
+      document.getElementById('overlay').textContent = 'Point camera at the table card';
     });
   </script>
+
 </body>
 </html>
