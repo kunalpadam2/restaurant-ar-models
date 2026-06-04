@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Menu</title>
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.2/dist/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* Canvas and video must fill screen */
+    canvas, video {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+    }
+
+    #overlay {
+      position: fixed;
+      top: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-family: sans-serif;
+      font-size: 15px;
+      z-index: 999;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: opacity 0.4s;
+    }
+
+    #locked-badge {
+      position: fixed;
+      bottom: 90px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,180,80,0.92);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-family: sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 999;
+      display: none;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: opacity 1s;
+    }
+
+    #rescan-btn {
+      position: fixed;
+      bottom: 30px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,107,0,0.95);
+      color: white;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 30px;
+      font-family: sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      z-index: 999;
+      display: none;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    #loader {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      font-family: sans-serif;
+      color: white;
+      transition: opacity 0.5s;
+    }
+
+    #loader h1 {
+      font-size: 26px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      letter-spacing: 1px;
+    }
+
+    #loader p {
+      font-size: 14px;
+      color: #aaa;
+      margin: 0 0 36px;
+    }
+
+    #progress-track {
+      width: 220px; height: 4px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    #progress-bar {
+      height: 100%; width: 0%;
+      background: #ff6b00;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    #loader-status {
+      font-size: 12px;
+      color: #555;
+      margin: 14px 0 0;
+    }
+
+    /* Debug panel - remove in production */
+    #debug {
+      position: fixed;
+      bottom: 100px; left: 10px;
+      background: rgba(0,0,0,0.6);
+      color: #0f0;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 8px;
+      border-radius: 8px;
+      z-index: 9998;
+      max-width: 260px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loader -->
+  <div id="loader">
+    <h1>AR Menu</h1>
+    <p>Preparing your experience...</p>
+    <div id="progress-track">
+      <div id="progress-bar"></div>
+    </div>
+    <p id="loader-status">Loading AR engine...</p>
+  </div>
+
+  <!-- UI -->
+  <div id="overlay">Initialising camera...</div>
+  <div id="locked-badge">📍 Dish locked in place</div>
+  <button id="rescan-btn" onclick="resetAR()">🔄 Rescan Marker</button>
+
+  <!-- Debug panel — shows what's happening live -->
+  <div id="debug">⏳ Starting...</div>
+
+  <a-scene
+    embedded
+    mindar-image="
+      imageTargetSrc: butter-chicken.mind;
+      autoStart: true;
+      uiLoading: no;
+      uiError: no;
+      uiScanning: no;
+      filterMinCF: 0.001;
+      filterBeta: 0.01;
+      missTolerance: 999;
+      warmupTolerance: 2;"
+    color-space="sRGB"
+    renderer="colorManagement: true;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets timeout="20000">
+      <a-asset-item id="food-model" src="butter-chicken.glb"></a-asset-item>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- Tracked entity — only used to capture initial world position -->
+    <a-entity id="tracked-target" mindar-image-target="targetIndex: 0">
+      <a-gltf-model
+        id="food-tracked"
+        src="#food-model"
+        position="0 0.1 0"
+        rotation="0 0 0"
+        scale="3 3 3"
+        visible="false">
+      </a-gltf-model>
+    </a-entity>
+
+    <!-- World-locked entity — stays in place after first detection -->
+    <a-entity id="world-anchor">
+      <a-gltf-model
+        id="food-locked"
+        src="#food-model"
+        position="0 0 0"
+        rotation="0 0 0"
+        scale="3 3 3"
+        visible="false">
+      </a-gltf-model>
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    // ── References ──────────────────────────────────────────────────────────
+    const scene         = document.querySelector('a-scene');
+    const overlay       = document.getElementById('overlay');
+    const badge         = document.getElementById('locked-badge');
+    const rescanBtn     = document.getElementById('rescan-btn');
+    const loader        = document.getElementById('loader');
+    const progressBar   = document.getElementById('progress-bar');
+    const loaderStatus  = document.getElementById('loader-status');
+    const debugEl       = document.getElementById('debug');
+    const trackedTarget = document.getElementById('tracked-target');
+    const foodTracked   = document.getElementById('food-tracked');
+    const foodLocked    = document.getElementById('food-locked');
+
+    let isLocked    = false;
+    let lockTimeout = null;
+
+    function log(msg) {
+      const time = new Date().toLocaleTimeString('en', {hour12:false});
+      debugEl.innerHTML = `[${time}] ${msg}<br>` + debugEl.innerHTML;
+    }
+
+    // ── Loading progress ────────────────────────────────────────────────────
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      if (progress < 85) {
+        progress += Math.random() * 10;
+        progressBar.style.width = Math.min(progress, 85) + '%';
+      }
+    }, 400);
+
+    // ── Scene loaded ────────────────────────────────────────────────────────
+    scene.addEventListener('loaded', () => {
+      log('✅ Scene loaded');
+      loaderStatus.textContent = 'Scene ready, starting camera...';
+    });
+
+    // ── AR ready ────────────────────────────────────────────────────────────
+    scene.addEventListener('arReady', () => {
+      log('✅ AR ready — camera running');
+      clearInterval(progressInterval);
+      progressBar.style.width = '100%';
+      loaderStatus.textContent = 'Camera ready!';
+
+      setTimeout(() => {
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 500);
+      }, 500);
+
+      overlay.textContent = 'Point camera at the table card';
+    });
+
+    // ── AR error ────────────────────────────────────────────────────────────
+    scene.addEventListener('arError', (e) => {
+      log('❌ AR error: ' + JSON.stringify(e.detail));
+      loaderStatus.textContent = '❌ Camera error — check permissions';
+      loaderStatus.style.color = '#f55';
+    });
+
+    // ── Assets loaded ───────────────────────────────────────────────────────
+    scene.addEventListener('asset-loaded', () => {
+      log('✅ 3D model loaded');
+    });
+
+    // ── Marker found ────────────────────────────────────────────────────────
+    scene.addEventListener('targetFound', () => {
+      log('🎯 Marker found');
+      if (isLocked) return;
+
+      overlay.style.opacity = '0';
+      foodTracked.setAttribute('visible', true);
+
+      lockTimeout = setTimeout(() => lockModel(), 600);
+    });
+
+    // ── Marker lost ─────────────────────────────────────────────────────────
+    scene.addEventListener('targetLost', () => {
+      log('👁 Marker lost');
+      if (isLocked) return;
+      clearTimeout(lockTimeout);
+      foodTracked.setAttribute('visible', false);
+      overlay.style.opacity = '1';
+    });
+
+    // ── Lock model in world space ───────────────────────────────────────────
+    function lockModel() {
+      if (isLocked) return;
+      isLocked = true;
+      log('🔒 Locking model to world');
+
+      const worldPos  = new THREE.Vector3();
+      const worldQuat = new THREE.Quaternion();
+      const worldScl  = new THREE.Vector3();
+      trackedTarget.object3D.matrixWorld.decompose(worldPos, worldQuat, worldScl);
+
+      const anchor = document.getElementById('world-anchor');
+      anchor.object3D.position.copy(worldPos);
+      anchor.object3D.quaternion.copy(worldQuat);
+
+      foodLocked.setAttribute('visible', true);
+      foodTracked.setAttribute('visible', false);
+
+      // Pause MindAR to save battery
+      const mindarSystem = scene.systems['mindar-image-system'];
+      if (mindarSystem) {
+        mindarSystem.pause();
+        log('⏸ MindAR paused — battery saving on');
+      }
+
+      // Show badge then fade, reveal rescan button
+      badge.style.display  = 'block';
+      badge.style.opacity  = '1';
+      overlay.style.display = 'none';
+
+      setTimeout(() => {
+        badge.style.opacity = '0';
+        setTimeout(() => {
+          badge.style.display = 'none';
+          rescanBtn.style.display = 'block';
+        }, 1000);
+      }, 2500);
+    }
+
+    // ── Reset / rescan ──────────────────────────────────────────────────────
+    function resetAR() {
+      isLocked = false;
+      clearTimeout(lockTimeout);
+      log('🔄 Rescanning...');
+
+      foodLocked.setAttribute('visible', false);
+      foodTracked.setAttribute('visible', false);
+
+      const anchor = document.getElementById('world-anchor');
+      anchor.object3D.position.set(0, 0, 0);
+      anchor.object3D.quaternion.set(0, 0, 0, 1);
+
+      rescanBtn.style.display  = 'none';
+      overlay.style.display    = 'block';
+      overlay.style.opacity    = '1';
+      overlay.textContent      = 'Point camera at the table card';
+
+      const mindarSystem = scene.systems['mindar-image-system'];
+      if (mindarSystem) {
+        mindarSystem.play();
+        log('▶ MindAR restarted');
+      }
+    }
+  </script>
+
+</body>
+</html>
